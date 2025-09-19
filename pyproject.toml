@@ -32,7 +32,6 @@ dependencies = [
     "pyasn1",
     "pymodbus",
     "cpppo",
-    "numpy==2.2.6",
     "pandas",
 ]
 
