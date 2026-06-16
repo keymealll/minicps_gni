@@ -4,10 +4,12 @@ toy run.py
 
 from mininet.net import Mininet
 from mininet.cli import CLI
+from mininet.node import OVSBridge
 from minicps.mcps import MiniCPS
 from topo import ToyTopo
 
 import sys
+import time
 
 
 class ToyCPS(MiniCPS):
@@ -22,9 +24,10 @@ class ToyCPS(MiniCPS):
         self.net.start()
 
         # start devices
-        # plc1, plc2 = self.net.get('plc1', 'plc2')
-        # plc1.cmd(sys.executable + ' plc1.py &')
-        # plc2.cmd(sys.executable + ' plc2.py &')
+        plc1, plc2 = self.net.get('plc1', 'plc2')
+        plc1.cmd(sys.executable + ' plc1.py &> logs/plc1.log &')
+        time.sleep(3)  # wait for plc1's ENIP server to be ready before plc2 connects
+        plc2.cmd(sys.executable + ' plc2.py &> logs/plc2.log &')
 
         CLI(self.net)
 
@@ -33,7 +36,7 @@ class ToyCPS(MiniCPS):
 if __name__ == "__main__":
 
     topo = ToyTopo()
-    net = Mininet(topo=topo)
+    net = Mininet(topo=topo, switch=OVSBridge, controller=None)
 
     toycps = ToyCPS(
         name='toyCPS',

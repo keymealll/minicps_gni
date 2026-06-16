@@ -27,9 +27,7 @@ class ToyPLC1(PLC):
     def pre_loop(self, sleep=0.1):
         print('DEBUG: toy plc1 enters pre_loop')
 
-        # sensor1 = self.set(SENSOR1_1, 2)
-        # print('DEBUG: toy plc1 sensor1: ', self.get(SENSOR1_1))
-        # self.memory['SENSOR1'] = sensor1
+        time.sleep(2)  # wait for own ENIP server subprocess to start listening
         self.send(SENSOR3_1, 2, PLC1_ADDR)
 
         time.sleep(sleep)
