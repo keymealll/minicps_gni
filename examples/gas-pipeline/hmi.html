@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gas Pipeline Midstream — HMI Dashboard</title>
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-card: #141926;
+            --bg-card-alt: #1a2035;
+            --border: #2a3050;
+            --accent: #00d4ff;
+            --accent-dim: rgba(0,212,255,0.15);
+            --success: #00ff88;
+            --success-dim: rgba(0,255,136,0.15);
+            --warning: #ffaa00;
+            --warning-dim: rgba(255,170,0,0.15);
+            --danger: #ff3366;
+            --danger-dim: rgba(255,51,102,0.15);
+            --text: #e8eaf0;
+            --text-dim: #6b7394;
+            --text-muted: #3d4565;
+            --gauge-track: #1e2540;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+            background: var(--bg-primary);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ========== HEADER ========== */
+        .header {
+            background: linear-gradient(135deg, #0d1220 0%, #141926 100%);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--accent), #7b68ee);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+        .status-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+        .status-dot.offline {
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ========== MAIN LAYOUT ========== */
+        .main {
+            padding: 24px 32px;
+            display: grid;
+            grid-template-columns: 280px 1fr 280px;
+            grid-template-rows: auto auto;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* ========== CARDS ========== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            opacity: 0.5;
+        }
+        .card-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-title .icon { font-size: 14px; }
+
+        /* ========== GAUGE ========== */
+        .gauge-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 12px 0;
+        }
+        .gauge-svg {
+            width: 160px;
+            height: 100px;
+            overflow: visible;
+        }
+        .gauge-track {
+            fill: none;
+            stroke: var(--gauge-track);
+            stroke-width: 12;
+            stroke-linecap: round;
+        }
+        .gauge-fill {
+            fill: none;
+            stroke-width: 12;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.8s ease, stroke 0.5s ease;
+        }
+        .gauge-value {
+            font-size: 28px;
+            font-weight: 700;
+            fill: var(--text);
+        }
+        .gauge-unit {
+            font-size: 11px;
+            fill: var(--text-dim);
+        }
+        .gauge-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* ========== VALVE / PUMP INDICATORS ========== */
+        .indicator-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            margin: 6px 0;
+            background: var(--bg-card-alt);
+            border-radius: 8px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .indicator-row.mismatch {
+            border-color: var(--danger);
+            background: var(--danger-dim);
+            animation: alert-pulse 1.5s infinite;
+        }
+        @keyframes alert-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,51,102,0); }
+            50% { box-shadow: 0 0 12px 2px rgba(255,51,102,0.3); }
+        }
+        .indicator-label {
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .indicator-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .badge-open {
+            background: var(--success-dim);
+            color: var(--success);
+            border: 1px solid rgba(0,255,136,0.3);
+        }
+        .badge-closed {
+            background: var(--danger-dim);
+            color: var(--danger);
+            border: 1px solid rgba(255,51,102,0.3);
+        }
+        .badge-on {
+            background: var(--success-dim);
+            color: var(--success);
+            border: 1px solid rgba(0,255,136,0.3);
+        }
+        .badge-off {
+            background: var(--warning-dim);
+            color: var(--warning);
+            border: 1px solid rgba(255,170,0,0.3);
+        }
+
+        /* ========== SEPARATOR TANK ========== */
+        .tank-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .tank-container {
+            width: 100%;
+            max-width: 320px;
+            height: 200px;
+            background: #0d1220;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            margin: 12px 0;
+        }
+        .tank-liquid {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg,
+                rgba(0,150,255,0.6) 0%,
+                rgba(0,100,200,0.8) 50%,
+                rgba(0,70,160,1) 100%);
+            transition: height 1s ease;
+            border-radius: 0 0 10px 10px;
+        }
+        .tank-liquid::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 0;
+            right: 0;
+            height: 12px;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(100,200,255,0.4), transparent 60%),
+                radial-gradient(ellipse at 80% 50%, rgba(100,200,255,0.3), transparent 60%);
+            animation: wave 3s ease-in-out infinite;
+        }
+        @keyframes wave {
+            0%, 100% { transform: translateX(-5px) scaleY(1); }
+            50% { transform: translateX(5px) scaleY(1.5); }
+        }
+        .tank-gas {
+            position: absolute;
+            top: 8px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 4px;
+            text-transform: uppercase;
+        }
+        .tank-level-text {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+            text-shadow: 0 0 10px rgba(0,100,255,0.8);
+            z-index: 1;
+        }
+        .tank-markers {
+            position: absolute;
+            top: 0; bottom: 0; left: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 8px 0;
+            z-index: 1;
+        }
+        .tank-marker {
+            font-size: 9px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .tank-marker::after {
+            content: '';
+            width: 20px;
+            height: 1px;
+            background: var(--text-muted);
+        }
+        .tank-marker.high { color: var(--danger); }
+        .tank-marker.low { color: var(--warning); }
+
+        /* ========== PIPELINE CONNECTORS ========== */
+        .center-card {
+            grid-column: 2;
+            grid-row: 1 / 3;
+            display: flex;
+            flex-direction: column;
+        }
+        .pipe-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 8px 0;
+        }
+        .pipe {
+            height: 4px;
+            flex: 1;
+            max-width: 60px;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+        .pipe.active {
+            background: var(--accent-dim);
+        }
+        .pipe.active::after {
+            content: '';
+            position: absolute;
+            top: 0; bottom: 0;
+            width: 20px;
+            background: var(--accent);
+            border-radius: 2px;
+            animation: flow 1.5s linear infinite;
+        }
+        @keyframes flow {
+            0% { left: -20px; }
+            100% { left: 100%; }
+        }
+        .pipe.inactive {
+            background: var(--text-muted);
+        }
+
+        /* ========== COMPARISON TABLE ========== */
+        .comparison {
+            grid-column: 1 / 4;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 8px;
+        }
+        .comp-item {
+            background: var(--bg-card-alt);
+            border-radius: 8px;
+            padding: 12px 14px;
+            border: 1px solid transparent;
+            transition: all 0.4s ease;
+        }
+        .comp-item.mismatch {
+            border-color: var(--danger);
+            background: var(--danger-dim);
+        }
+        .comp-item-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .comp-values {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+        }
+        .comp-val {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .comp-val.physical { color: var(--accent); }
+        .comp-val.network { color: var(--success); }
+        .comp-val.network.spoofed { color: var(--danger); }
+        .comp-vs {
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        .comp-alert {
+            font-size: 10px;
+            color: var(--danger);
+            margin-top: 4px;
+            display: none;
+        }
+        .comp-item.mismatch .comp-alert { display: block; }
+
+        /* ========== FLOW VALUE ========== */
+        .value-display {
+            text-align: center;
+            padding: 8px;
+            margin: 6px 0;
+            background: var(--bg-card-alt);
+            border-radius: 8px;
+        }
+        .value-number {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+        .value-unit {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-left: 4px;
+        }
+
+        /* ========== ALERT BANNER ========== */
+        .alert-banner {
+            grid-column: 1 / 4;
+            background: var(--danger-dim);
+            border: 1px solid var(--danger);
+            border-radius: 12px;
+            padding: 14px 20px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            animation: alert-pulse 1.5s infinite;
+        }
+        .alert-banner.visible { display: flex; }
+        .alert-banner .alert-icon { font-size: 24px; }
+        .alert-banner .alert-text {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--danger);
+        }
+        .alert-banner .alert-detail {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+
+        /* ========== RESPONSIVE ========== */
+        @media (max-width: 1000px) {
+            .main {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+            .center-card { grid-column: 1; grid-row: auto; }
+            .comparison { grid-column: 1; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HEADER -->
+    <div class="header">
+        <h1>⚡ Gas Pipeline Midstream — HMI Dashboard</h1>
+        <div class="status">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+
+    <!-- ALERT BANNER -->
+    <div class="main">
+        <div class="alert-banner" id="alertBanner">
+            <span class="alert-icon">🚨</span>
+            <div>
+                <div class="alert-text">ATTACK DETECTED — Physical / Network Mismatch</div>
+                <div class="alert-detail" id="alertDetail">Values on the ENIP network do not match the physical state.</div>
+            </div>
+        </div>
+
+        <!-- LEFT: INLET SECTION -->
+        <div class="card" style="grid-row: 1;">
+            <div class="card-title"><span class="icon">🔵</span> PLC1 — Inlet</div>
+
+            <!-- PT101 Gauge -->
+            <div class="gauge-container">
+                <svg class="gauge-svg" viewBox="0 0 160 100">
+                    <path class="gauge-track" d="M 20 80 A 60 60 0 0 1 140 80"/>
+                    <path class="gauge-fill" id="gaugePT101" d="M 20 80 A 60 60 0 0 1 140 80"
+                          stroke="var(--accent)" stroke-dasharray="188" stroke-dashoffset="188"/>
+                    <text class="gauge-value" x="80" y="72" text-anchor="middle" id="valPT101">—</text>
+                    <text class="gauge-unit" x="80" y="90" text-anchor="middle">kPa</text>
+                </svg>
+                <div class="gauge-label">PT101 — Inlet Pressure</div>
+            </div>
+
+            <!-- AV1 Valve -->
+            <div class="indicator-row" id="rowAV1">
+                <span class="indicator-label">AV1 Inlet Valve</span>
+                <span class="indicator-badge" id="badgeAV1">—</span>
+            </div>
+
+            <!-- FT101 Flow -->
+            <div class="value-display">
+                <span class="value-number" id="valFT101">—</span>
+                <span class="value-unit">m³/h</span>
+                <div class="gauge-label">FT101 — Inlet Flow</div>
+            </div>
+        </div>
+
+        <!-- CENTER: SEPARATOR TANK -->
+        <div class="card center-card">
+            <div class="card-title"><span class="icon">🟡</span> Separator Tank</div>
+
+            <!-- Tank Pressure Gauge -->
+            <div class="gauge-container">
+                <svg class="gauge-svg" viewBox="0 0 160 100">
+                    <path class="gauge-track" d="M 20 80 A 60 60 0 0 1 140 80"/>
+                    <path class="gauge-fill" id="gaugePT301" d="M 20 80 A 60 60 0 0 1 140 80"
+                          stroke="var(--accent)" stroke-dasharray="188" stroke-dashoffset="188"/>
+                    <text class="gauge-value" x="80" y="72" text-anchor="middle" id="valPT301">—</text>
+                    <text class="gauge-unit" x="80" y="90" text-anchor="middle">kPa</text>
+                </svg>
+                <div class="gauge-label">PT301 — Tank Pressure</div>
+            </div>
+
+            <!-- Tank Visual -->
+            <div class="tank-wrapper">
+                <div class="tank-container">
+                    <div class="tank-gas">· · · gas space · · ·</div>
+                    <div class="tank-markers">
+                        <span class="tank-marker high">HH 1.3m</span>
+                        <span class="tank-marker high">H 1.0m</span>
+                        <span class="tank-marker low">L 0.3m</span>
+                        <span class="tank-marker low">LL 0.1m</span>
+                    </div>
+                    <div class="tank-liquid" id="tankLiquid" style="height: 38%;">
+                    </div>
+                    <div class="tank-level-text" id="tankLevelText">—</div>
+                </div>
+                <div class="gauge-label">LT201 — Tank Liquid Level</div>
+            </div>
+
+            <!-- Drain Controls -->
+            <div style="margin-top: 16px;">
+                <div class="card-title" style="margin-bottom: 8px;"><span class="icon">🟢</span> PLC2 — Drain</div>
+                <div class="indicator-row" id="rowAV2">
+                    <span class="indicator-label">AV2 Drain Valve</span>
+                    <span class="indicator-badge" id="badgeAV2">—</span>
+                </div>
+                <div class="indicator-row" id="rowPUMP1">
+                    <span class="indicator-label">PUMP1 Ejector</span>
+                    <span class="indicator-badge" id="badgePUMP1">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: OUTLET SECTION -->
+        <div class="card" style="grid-row: 1;">
+            <div class="card-title"><span class="icon">🔴</span> PLC3 — Gas Outlet</div>
+
+            <!-- AV3 Valve -->
+            <div class="indicator-row" id="rowAV3">
+                <span class="indicator-label">AV3 Gas Outlet</span>
+                <span class="indicator-badge" id="badgeAV3">—</span>
+            </div>
+
+            <div style="margin-top: 24px; padding: 16px; background: var(--bg-card-alt); border-radius: 8px;">
+                <div class="gauge-label" style="margin-bottom: 8px;">Outlet Status</div>
+                <div id="outletFlowIndicator" style="font-size: 32px; text-align: center;">
+                    💨
+                </div>
+                <div id="outletStatus" style="text-align: center; font-size: 12px; color: var(--text-dim); margin-top: 8px;">
+                    Gas venting...
+                </div>
+            </div>
+
+            <!-- Interlock Values -->
+            <div style="margin-top: 24px;">
+                <div class="card-title" style="margin-bottom: 8px;"><span class="icon">🔗</span> PLC1 Interlocks</div>
+                <div class="value-display">
+                    <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">LT201 (from PLC2)</div>
+                    <span class="value-number" id="valLT201interlock" style="font-size: 16px;">—</span>
+                    <span class="value-unit">m</span>
+                </div>
+                <div class="value-display">
+                    <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 4px;">PT301 (from PLC3)</div>
+                    <span class="value-number" id="valPT301interlock" style="font-size: 16px;">—</span>
+                    <span class="value-unit">kPa</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM: COMPARISON TABLE -->
+        <div class="card comparison">
+            <div class="card-title"><span class="icon">🔍</span> Physical Reality vs Network View (ENIP) — Attack Detection</div>
+            <div class="comparison-grid" id="comparisonGrid">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== Configuration ==========
+        const POLL_INTERVAL = 1500; // ms
+        const MISMATCH_THRESHOLD = {
+            'PT101': 10.0,    // kPa tolerance
+            'LT201': 0.05,    // meters tolerance
+            'PT301': 10.0,    // kPa tolerance
+            'FT101': 0.5,     // flow tolerance
+            'AV1': 0.5,       // binary — any difference
+            'AV2': 0.5,
+            'AV3': 0.5,
+            'PUMP1': 0.5,
+        };
+
+        const TAG_UNITS = {
+            'PT101': 'kPa', 'LT201': 'm', 'PT301': 'kPa',
+            'FT101': 'm³/h', 'AV1': '', 'AV2': '', 'AV3': '', 'PUMP1': ''
+        };
+
+        const TAG_LABELS = {
+            'PT101': 'Inlet Pressure',
+            'LT201': 'Tank Level',
+            'PT301': 'Tank Pressure',
+            'FT101': 'Inlet Flow',
+            'AV1': 'Inlet Valve',
+            'AV2': 'Drain Valve',
+            'AV3': 'Gas Outlet',
+            'PUMP1': 'Pump Ejector'
+        };
+
+        // ========== Gauge Helper ==========
+        function setGauge(elementId, value, min, max, threshH, threshHH) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            const ratio = Math.max(0, Math.min(1, (value - min) / (max - min)));
+            const arcLength = 188;
+            const offset = arcLength * (1 - ratio);
+            el.style.strokeDashoffset = offset;
+
+            // Color based on thresholds
+            if (value >= threshHH) {
+                el.style.stroke = 'var(--danger)';
+            } else if (value >= threshH) {
+                el.style.stroke = 'var(--warning)';
+            } else {
+                el.style.stroke = 'var(--accent)';
+            }
+        }
+
+        // ========== Valve/Pump Badge ==========
+        function setBadge(elementId, value, type) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            if (type === 'valve') {
+                if (value >= 1) {
+                    el.textContent = 'OPEN';
+                    el.className = 'indicator-badge badge-open';
+                } else {
+                    el.textContent = 'CLOSED';
+                    el.className = 'indicator-badge badge-closed';
+                }
+            } else {
+                if (value >= 1) {
+                    el.textContent = 'ON';
+                    el.className = 'indicator-badge badge-on';
+                } else {
+                    el.textContent = 'OFF';
+                    el.className = 'indicator-badge badge-off';
+                }
+            }
+        }
+
+        // ========== Comparison Grid ==========
+        function updateComparison(physical, network) {
+            const grid = document.getElementById('comparisonGrid');
+            const tags = ['PT101', 'LT201', 'PT301', 'FT101', 'AV1', 'AV2', 'AV3', 'PUMP1'];
+            let html = '';
+            let mismatches = [];
+
+            for (const tag of tags) {
+                const pVal = physical[tag];
+                const nVal = network[tag];
+                const threshold = MISMATCH_THRESHOLD[tag] || 1.0;
+                const isMismatch = (pVal != null && nVal != null &&
+                    Math.abs(pVal - nVal) > threshold);
+
+                if (isMismatch) mismatches.push(tag);
+
+                const pDisplay = pVal != null ? formatValue(tag, pVal) : '—';
+                const nDisplay = nVal != null ? formatValue(tag, nVal) : '—';
+
+                html += `
+                    <div class="comp-item ${isMismatch ? 'mismatch' : ''}">
+                        <div class="comp-item-label">${TAG_LABELS[tag] || tag}</div>
+                        <div class="comp-values">
+                            <span class="comp-val physical">${pDisplay}</span>
+                            <span class="comp-vs">vs</span>
+                            <span class="comp-val network ${isMismatch ? 'spoofed' : ''}">${nDisplay}</span>
+                        </div>
+                        <div class="comp-alert">⚠️ SPOOFED — values don't match!</div>
+                    </div>
+                `;
+            }
+            grid.innerHTML = html;
+
+            // Alert banner
+            const banner = document.getElementById('alertBanner');
+            if (mismatches.length > 0) {
+                banner.classList.add('visible');
+                document.getElementById('alertDetail').textContent =
+                    'Affected tags: ' + mismatches.join(', ');
+            } else {
+                banner.classList.remove('visible');
+            }
+        }
+
+        function formatValue(tag, value) {
+            if (value == null) return '—';
+            if (['AV1', 'AV2', 'AV3'].includes(tag)) {
+                return value >= 1 ? 'OPEN' : 'CLOSED';
+            }
+            if (tag === 'PUMP1') {
+                return value >= 1 ? 'ON' : 'OFF';
+            }
+            if (tag === 'LT201') return value.toFixed(3) + ' m';
+            if (tag === 'FT101') return value.toFixed(1) + ' m³/h';
+            return value.toFixed(1) + ' kPa';
+        }
+
+        // ========== Main Update ==========
+        function updateDashboard(data) {
+            const p = data.physical || {};
+            const n = data.network || {};
+
+            // Use network values for display (this is what operators see)
+            // Fall back to physical if network not available
+            const display = {};
+            for (const key of Object.keys(p)) {
+                display[key] = (n[key] != null) ? n[key] : p[key];
+            }
+
+            // PT101 Gauge
+            const pt101 = display['PT101'] || p['PT101'] || 0;
+            setGauge('gaugePT101', pt101, 0, 1000, 700, 800);
+            document.getElementById('valPT101').textContent = pt101.toFixed(0);
+
+            // PT301 Gauge
+            const pt301 = display['PT301'] || p['PT301'] || 0;
+            setGauge('gaugePT301', pt301, 0, 1000, 600, 750);
+            document.getElementById('valPT301').textContent = pt301.toFixed(0);
+
+            // Tank Level
+            const lt201 = display['LT201'] || p['LT201'] || 0;
+            const tankPercent = Math.max(0, Math.min(100, (lt201 / 1.3) * 100));
+            document.getElementById('tankLiquid').style.height = tankPercent + '%';
+            document.getElementById('tankLevelText').textContent = lt201.toFixed(3) + ' m';
+
+            // Tank color based on level
+            const tankEl = document.getElementById('tankLiquid');
+            if (lt201 >= 1.0) {
+                tankEl.style.background = 'linear-gradient(180deg, rgba(255,50,50,0.6) 0%, rgba(200,30,30,0.8) 50%, rgba(160,20,20,1) 100%)';
+            } else if (lt201 <= 0.3) {
+                tankEl.style.background = 'linear-gradient(180deg, rgba(255,170,0,0.6) 0%, rgba(200,130,0,0.8) 50%, rgba(160,100,0,1) 100%)';
+            } else {
+                tankEl.style.background = '';
+            }
+
+            // Valves & Pump
+            const av1 = display['AV1'] || p['AV1'] || 0;
+            const av2 = display['AV2'] || p['AV2'] || 0;
+            const av3 = display['AV3'] || p['AV3'] || 0;
+            const pump1 = display['PUMP1'] || p['PUMP1'] || 0;
+
+            setBadge('badgeAV1', av1, 'valve');
+            setBadge('badgeAV2', av2, 'valve');
+            setBadge('badgeAV3', av3, 'valve');
+            setBadge('badgePUMP1', pump1, 'pump');
+
+            // Flow
+            const ft101 = display['FT101'] || p['FT101'] || 0;
+            document.getElementById('valFT101').textContent = ft101.toFixed(1);
+
+            // Outlet status
+            const outletStatus = document.getElementById('outletStatus');
+            const outletIcon = document.getElementById('outletFlowIndicator');
+            if (av3 >= 1) {
+                outletIcon.textContent = '💨';
+                outletStatus.textContent = 'Gas venting...';
+                outletStatus.style.color = 'var(--success)';
+            } else {
+                outletIcon.textContent = '🚫';
+                outletStatus.textContent = 'Outlet sealed';
+                outletStatus.style.color = 'var(--danger)';
+            }
+
+            // Interlocks (these come from PLC1's ENIP copy)
+            const lt201i = n['LT201'] || p['LT201'] || 0;
+            const pt301i = n['PT301'] || p['PT301'] || 0;
+            document.getElementById('valLT201interlock').textContent = lt201i.toFixed(3);
+            document.getElementById('valPT301interlock').textContent = pt301i.toFixed(0);
+
+            // Comparison
+            updateComparison(p, n);
+
+            // Mismatch highlighting on indicator rows
+            checkMismatch('rowAV1', p['AV1'], n['AV1'], 0.5);
+            checkMismatch('rowAV2', p['AV2'], n['AV2'], 0.5);
+            checkMismatch('rowAV3', p['AV3'], n['AV3'], 0.5);
+            checkMismatch('rowPUMP1', p['PUMP1'], n['PUMP1'], 0.5);
+        }
+
+        function checkMismatch(rowId, pVal, nVal, threshold) {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            if (pVal != null && nVal != null && Math.abs(pVal - nVal) > threshold) {
+                row.classList.add('mismatch');
+            } else {
+                row.classList.remove('mismatch');
+            }
+        }
+
+        // ========== Polling ==========
+        let failCount = 0;
+
+        async function poll() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                updateDashboard(data);
+
+                document.getElementById('statusDot').classList.remove('offline');
+                document.getElementById('statusText').textContent = 'Online — polling';
+                failCount = 0;
+            } catch (e) {
+                failCount++;
+                document.getElementById('statusDot').classList.add('offline');
+                document.getElementById('statusText').textContent =
+                    'Connection lost (' + failCount + ')';
+            }
+        }
+
+        // Start polling
+        poll();
+        setInterval(poll, POLL_INTERVAL);
+    </script>
+</body>
+</html>
