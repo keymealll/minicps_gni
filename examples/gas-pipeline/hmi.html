@@ -594,15 +594,21 @@
         // ========== Configuration ==========
         const POLL_INTERVAL = 1500; // ms
         const MISMATCH_THRESHOLD = {
-            'PT101': 10.0,    // kPa tolerance
+            'PT101': 15.0,    // kPa tolerance
             'LT201': 0.05,    // meters tolerance
-            'PT301': 10.0,    // kPa tolerance
-            'FT101': 0.5,     // flow tolerance
+            'PT301': 15.0,    // kPa tolerance
+            'FT101': 3.0,     // flow can naturally differ during valve transitions
             'AV1': 0.5,       // binary — any difference
             'AV2': 0.5,
             'AV3': 0.5,
             'PUMP1': 0.5,
         };
+
+        // Grace period: don't flag mismatches for the first N seconds
+        // (PLCs need time to boot and publish their ENIP tags)
+        const STARTUP_GRACE_SECONDS = 15;
+        const startTime = Date.now();
+        let isWarmedUp = false;
 
         const TAG_UNITS = {
             'PT101': 'kPa', 'LT201': 'm', 'PT301': 'kPa',
@@ -669,12 +675,26 @@
             let html = '';
             let mismatches = [];
 
+            // Check if we're still in the startup grace period
+            const elapsedSeconds = (Date.now() - startTime) / 1000;
+            isWarmedUp = elapsedSeconds > STARTUP_GRACE_SECONDS;
+
             for (const tag of tags) {
                 const pVal = physical[tag];
                 const nVal = network[tag];
                 const threshold = MISMATCH_THRESHOLD[tag] || 1.0;
-                const isMismatch = (pVal != null && nVal != null &&
-                    Math.abs(pVal - nVal) > threshold);
+
+                // Don't flag a mismatch if:
+                // 1. We're still in the grace period
+                // 2. The ENIP value is exactly 0 for a continuous sensor (not yet published)
+                // 3. Either value is missing
+                const enipNotPublished = (nVal === 0.0 || nVal == null) &&
+                    ['PT101','PT301','LT201','FT101'].includes(tag);
+
+                const isMismatch = isWarmedUp &&
+                    pVal != null && nVal != null &&
+                    !enipNotPublished &&
+                    Math.abs(pVal - nVal) > threshold;
 
                 if (isMismatch) mismatches.push(tag);
 
@@ -820,8 +840,15 @@
                 const data = await res.json();
                 updateDashboard(data);
 
+                const elapsed = Math.round((Date.now() - startTime) / 1000);
                 document.getElementById('statusDot').classList.remove('offline');
-                document.getElementById('statusText').textContent = 'Online — polling';
+                if (!isWarmedUp) {
+                    const remaining = STARTUP_GRACE_SECONDS - elapsed;
+                    document.getElementById('statusText').textContent =
+                        'Warming up — attack detection in ' + remaining + 's';
+                } else {
+                    document.getElementById('statusText').textContent = 'Online — polling';
+                }
                 failCount = 0;
             } catch (e) {
                 failCount++;

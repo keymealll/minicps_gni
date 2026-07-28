@@ -71,7 +71,6 @@ class GasPLC1(PLC):
                 # CLOSE AV1 — inlet pressure too high
                 print("INFO PLC1 - pt101 over H -> close AV1.")
                 self.set(AV1, 0)
-                self.send(AV1, 0, PLC1_ADDR)
 
             elif pt101 <= PT101_THRESH['LL']:
                 print("WARNING PLC1 - pt101 under LL: %.2f <= %.2f kPa." % (
@@ -81,7 +80,11 @@ class GasPLC1(PLC):
                 # OPEN AV1 — inlet pressure too low, allow gas
                 print("INFO PLC1 - pt101 under L -> open AV1.")
                 self.set(AV1, 1)
-                self.send(AV1, 1, PLC1_ADDR)
+
+            # Always publish current AV1 state to ENIP every cycle
+            # (not just when a control decision fires — keeps ENIP in sync with SQLite)
+            av1_state = int(self.get(AV1))
+            self.send(AV1, av1_state, PLC1_ADDR)
 
             # Receive interlock: tank level from PLC2
             lt201 = float(self.receive(LT201_2, PLC2_ADDR))

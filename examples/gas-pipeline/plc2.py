@@ -63,9 +63,7 @@ class GasPLC2(PLC):
                 # OPEN AV2 + START PUMP — liquid too high, drain it
                 print("INFO PLC2 - lt201 over H -> open AV2, start PUMP1.")
                 self.set(AV2, 1)
-                self.send(AV2, 1, PLC2_ADDR)
                 self.set(PUMP1, 1)
-                self.send(PUMP1, 1, PLC2_ADDR)
 
             elif lt201 <= LT201_THRESH['LL']:
                 print("WARNING PLC2 - lt201 under LL: %.3f <= %.3f m." % (
@@ -75,9 +73,13 @@ class GasPLC2(PLC):
                 # CLOSE AV2 + STOP PUMP — liquid too low, stop draining
                 print("INFO PLC2 - lt201 under L -> close AV2, stop PUMP1.")
                 self.set(AV2, 0)
-                self.send(AV2, 0, PLC2_ADDR)
                 self.set(PUMP1, 0)
-                self.send(PUMP1, 0, PLC2_ADDR)
+
+            # Always publish current actuator states to ENIP every cycle
+            av2_state = int(self.get(AV2))
+            pump1_state = int(self.get(PUMP1))
+            self.send(AV2, av2_state, PLC2_ADDR)
+            self.send(PUMP1, pump1_state, PLC2_ADDR)
 
             time.sleep(PLC_PERIOD_SEC)
             count += 1

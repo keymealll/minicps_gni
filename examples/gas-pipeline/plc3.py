@@ -61,7 +61,6 @@ class GasPLC3(PLC):
                 # OPEN AV3 — tank pressure too high, vent gas
                 print("INFO PLC3 - pt301 over H -> open AV3.")
                 self.set(AV3, 1)
-                self.send(AV3, 1, PLC3_ADDR)
 
             elif pt301 <= PT301_THRESH['LL']:
                 print("WARNING PLC3 - pt301 under LL: %.2f <= %.2f kPa." % (
@@ -71,7 +70,10 @@ class GasPLC3(PLC):
                 # CLOSE AV3 — tank pressure too low, build pressure
                 print("INFO PLC3 - pt301 under L -> close AV3.")
                 self.set(AV3, 0)
-                self.send(AV3, 0, PLC3_ADDR)
+
+            # Always publish current AV3 state to ENIP every cycle
+            av3_state = int(self.get(AV3))
+            self.send(AV3, av3_state, PLC3_ADDR)
 
             time.sleep(PLC_PERIOD_SEC)
             count += 1
